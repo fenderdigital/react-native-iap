@@ -76,6 +76,7 @@ public class RNIapModule extends ReactContextBaseJavaModule implements Purchases
   public RNIapModule(ReactApplicationContext reactContext) {
     super(reactContext);
     this.reactContext = reactContext;
+    this.skus = new ArrayList<SkuDetails>();
     reactContext.addLifecycleEventListener(lifecycleEventListener);
   }
 
@@ -98,11 +99,16 @@ public class RNIapModule extends ReactContextBaseJavaModule implements Purchases
         if (!bSetupCallbackConsumed) {
           bSetupCallbackConsumed = true;
           if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.OK ) {
-            callback.run();
+            if (billingClient != null && billingClient.isReady()) {
+              callback.run();
+            }
           } else {
             WritableMap error = Arguments.createMap();
             error.putInt("responseCode", billingResult.getResponseCode());
             error.putString("debugMessage", billingResult.getDebugMessage());
+            String[] errorData = DoobooUtils.getInstance().getBillingResponseData(billingResult.getResponseCode());
+            error.putString("code", errorData[0]);
+            error.putString("message", errorData[1]);
             sendEvent(reactContext, "purchase-error", error);
             DoobooUtils.getInstance().rejectPromiseWithBillingError(promise, billingResult.getResponseCode());
           }
@@ -131,12 +137,15 @@ public class RNIapModule extends ReactContextBaseJavaModule implements Purchases
     billingClient.startConnection(new BillingClientStateListener() {
       @Override
       public void onBillingSetupFinished(BillingResult billingResult) {
-        if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.OK) {
-          try {
+        int responseCode = billingResult.getResponseCode();
+        try {
+          if (responseCode == BillingClient.BillingResponseCode.OK) {
             promise.resolve(true);
-          } catch (ObjectAlreadyConsumedException oce) {
-            Log.e(TAG, oce.getMessage());
+          } else {
+            DoobooUtils.getInstance().rejectPromiseWithBillingError(promise, responseCode);
           }
+        } catch (ObjectAlreadyConsumedException oce) {
+          Log.e(TAG, oce.getMessage());
         }
       }
       @Override
@@ -192,16 +201,18 @@ public class RNIapModule extends ReactContextBaseJavaModule implements Purchases
               .setDeveloperPayload(purchase.getDeveloperPayload())
               .build();
 
-          final ConsumeResponseListener listener = new ConsumeResponseListener() {
+         final ConsumeResponseListener listener = new ConsumeResponseListener() {
             @Override
             public void onConsumeResponse(BillingResult billingResult, String outToken) {
+              if (billingResult.getResponseCode() != BillingClient.BillingResponseCode.OK) {
+                DoobooUtils.getInstance().rejectPromiseWithBillingError(promise, billingResult.getResponseCode());
+                return;
+              }
               array.pushString(outToken);
-              if (purchases.size() == array.size()) {
-                try {
-                  promise.resolve(true);
-                } catch (ObjectAlreadyConsumedException oce) {
-                  Log.e(TAG, oce.getMessage());
-                }
+              try {
+                promise.resolve(true);
+              } catch (ObjectAlreadyConsumedException oce) {
+                promise.reject(oce.getMessage());
               }
             }
           };
@@ -234,7 +245,11 @@ public class RNIapModule extends ReactContextBaseJavaModule implements Purchases
               return;
             }
 
-            skus = skuDetailsList;
+            for (SkuDetails sku : skuDetailsList) {
+              if (!skus.contains(sku)) {
+                skus.add(sku);
+              }
+            }
             WritableNativeArray items = new WritableNativeArray();
 
             for (SkuDetails skuDetails : skuDetailsList) {
@@ -278,21 +293,27 @@ public class RNIapModule extends ReactContextBaseJavaModule implements Purchases
         Purchase.PurchasesResult result = billingClient.queryPurchases(type.equals("subs") ? BillingClient.SkuType.SUBS : BillingClient.SkuType.INAPP);
         final List<Purchase> purchases = result.getPurchasesList();
 
-        for (Purchase purchase : purchases) {
-          WritableNativeMap item = new WritableNativeMap();
-          item.putString("productId", purchase.getSku());
-          item.putString("transactionId", purchase.getOrderId());
-          item.putString("transactionDate", String.valueOf(purchase.getPurchaseTime()));
-          item.putString("transactionReceipt", purchase.getOriginalJson());
-          item.putString("orderId", purchase.getOrderId());
-          item.putString("purchaseToken", purchase.getPurchaseToken());
-          item.putString("developerPayloadAndroid", purchase.getDeveloperPayload());
-          item.putString("signatureAndroid", purchase.getSignature());
-          item.putInt("purchaseStateAndroid", purchase.getPurchaseState());
+        if (purchases != null) {
+          for (Purchase purchase : purchases) {
+            WritableNativeMap item = new WritableNativeMap();
+            item.putString("productId", purchase.getSku());
+            item.putString("transactionId", purchase.getOrderId());
+            item.putDouble("transactionDate", purchase.getPurchaseTime());
+            item.putString("transactionReceipt", purchase.getOriginalJson());
+            item.putString("orderId", purchase.getOrderId());
+            item.putString("purchaseToken", purchase.getPurchaseToken());
+            item.putString("developerPayloadAndroid", purchase.getDeveloperPayload());
+            item.putString("signatureAndroid", purchase.getSignature());
+            item.putInt("purchaseStateAndroid", purchase.getPurchaseState());
+            item.putBoolean("isAcknowledgedAndroid", purchase.isAcknowledged());
 
-          if (type.equals(BillingClient.SkuType.SUBS)) purchase.isAutoRenewing();
-          items.pushMap(item);
+            if (type.equals(BillingClient.SkuType.SUBS)) {
+              item.putBoolean("autoRenewingAndroid", purchase.isAutoRenewing());
+            }
+            items.pushMap(item);
+          }
         }
+
         try {
           promise.resolve(items);
         } catch (ObjectAlreadyConsumedException oce) {
@@ -321,7 +342,7 @@ public class RNIapModule extends ReactContextBaseJavaModule implements Purchases
             for (PurchaseHistoryRecord purchase : purchaseHistoryRecordList) {
               WritableMap item = Arguments.createMap();
               item.putString("productId", purchase.getSku());
-              item.putString("transactionDate", String.valueOf(purchase.getPurchaseTime()));
+              item.putDouble("transactionDate", purchase.getPurchaseTime());
               item.putString("transactionReceipt", purchase.getOriginalJson());
               item.putString("purchaseToken", purchase.getPurchaseToken());
               item.putString("dataAndroid", purchase.getOriginalJson());
@@ -342,7 +363,15 @@ public class RNIapModule extends ReactContextBaseJavaModule implements Purchases
   }
 
   @ReactMethod
-  public void buyItemByType(final String type, final String sku, final String oldSku, final Integer prorationMode, final Promise promise) {
+  public void buyItemByType(
+    final String type,
+    final String sku,
+    final String oldSku,
+    final Integer prorationMode,
+    final String developerId,
+    final String accountId,
+    final Promise promise
+  ) {
     final Activity activity = getCurrentActivity();
 
     if (activity == null) {
@@ -365,11 +394,10 @@ public class RNIapModule extends ReactContextBaseJavaModule implements Purchases
             } else if (prorationMode == BillingFlowParams.ProrationMode.IMMEDIATE_WITHOUT_PRORATION) {
               builder.setReplaceSkusProrationMode(BillingFlowParams.ProrationMode.IMMEDIATE_WITHOUT_PRORATION);
             } else {
-              // builder.addOldSku(oldSku);
               builder.setOldSku(oldSku);
             }
           } else {
-            builder.addOldSku(oldSku);
+            builder.setOldSku(oldSku);
           }
         }
 
@@ -388,20 +416,24 @@ public class RNIapModule extends ReactContextBaseJavaModule implements Purchases
           String debugMessage = "The sku was not found. Please fetch products first by calling getItems";
           WritableMap error = Arguments.createMap();
           error.putString("debugMessage", debugMessage);
+          error.putString("code", PROMISE_BUY_ITEM);
+          error.putString("message", debugMessage);
           sendEvent(reactContext, "purchase-error", error);
           promise.reject(PROMISE_BUY_ITEM, debugMessage);
           return;
         }
 
-        BillingFlowParams flowParams = builder
-            .setSkuDetails(selectedSku)
-            .build();
-        BillingResult billingResult = billingClient.launchBillingFlow(activity, flowParams);
+        if (accountId != null) {
+          builder.setAccountId(accountId);
+        }
+        if (developerId != null) {
+          builder.setDeveloperId(developerId);
+        }
 
-        Log.d(
-            TAG,
-            "buyItemByType (type: " + type + ", sku: " + sku + ", oldSku: " + oldSku + ", prorationMode: " + prorationMode + ") responseCode: " + billingResult.getResponseCode() + "(" + DoobooUtils.getInstance().getBillingResponseCodeName(billingResult.getResponseCode()) + ")"
-        );
+        builder.setSkuDetails(selectedSku);
+        BillingFlowParams flowParams = builder.build();
+        BillingResult billingResult = billingClient.launchBillingFlow(activity, flowParams);
+        String[] errorData = DoobooUtils.getInstance().getBillingResponseData(billingResult.getResponseCode());
       }
     });
   }
@@ -423,6 +455,9 @@ public class RNIapModule extends ReactContextBaseJavaModule implements Purchases
           WritableMap map = Arguments.createMap();
           map.putInt("responseCode", billingResult.getResponseCode());
           map.putString("debugMessage", billingResult.getDebugMessage());
+          String[] errorData = DoobooUtils.getInstance().getBillingResponseData(billingResult.getResponseCode());
+          map.putString("code", errorData[0]);
+          map.putString("message", errorData[1]);
           promise.resolve(map);
         } catch (ObjectAlreadyConsumedException oce) {
           Log.e(TAG, oce.getMessage());
@@ -447,9 +482,12 @@ public class RNIapModule extends ReactContextBaseJavaModule implements Purchases
           WritableMap map = Arguments.createMap();
           map.putInt("responseCode", billingResult.getResponseCode());
           map.putString("debugMessage", billingResult.getDebugMessage());
+          String[] errorData = DoobooUtils.getInstance().getBillingResponseData(billingResult.getResponseCode());
+          map.putString("code", errorData[0]);
+          map.putString("message", errorData[1]);
           promise.resolve(map);
         } catch (ObjectAlreadyConsumedException oce) {
-          Log.e(TAG, oce.getMessage());
+          promise.reject(oce.getMessage());
         }
       }
     });
@@ -461,27 +499,76 @@ public class RNIapModule extends ReactContextBaseJavaModule implements Purchases
       WritableMap error = Arguments.createMap();
       error.putInt("responseCode", billingResult.getResponseCode());
       error.putString("debugMessage", billingResult.getDebugMessage());
+      String[] errorData = DoobooUtils.getInstance().getBillingResponseData(billingResult.getResponseCode());
+      error.putString("code", errorData[0]);
+      error.putString("message", errorData[1]);
       sendEvent(reactContext, "purchase-error", error);
       DoobooUtils.getInstance().rejectPromisesWithBillingError(PROMISE_BUY_ITEM, billingResult.getResponseCode());
       return;
     }
 
-    Purchase purchase = purchases.get(0);
+    if (purchases != null) {
+      WritableMap promiseItem = null;
+      for (Purchase purchase : purchases) {
+        WritableMap item = Arguments.createMap();
+        item.putString("productId", purchase.getSku());
+        item.putString("transactionId", purchase.getOrderId());
+        item.putDouble("transactionDate", purchase.getPurchaseTime());
+        item.putString("transactionReceipt", purchase.getOriginalJson());
+        item.putString("purchaseToken", purchase.getPurchaseToken());
+        item.putString("dataAndroid", purchase.getOriginalJson());
+        item.putString("signatureAndroid", purchase.getSignature());
+        item.putBoolean("autoRenewingAndroid", purchase.isAutoRenewing());
+        item.putBoolean("isAcknowledgedAndroid", purchase.isAcknowledged());
+        item.putInt("purchaseStateAndroid", purchase.getPurchaseState());
 
-    WritableMap item = Arguments.createMap();
-    item.putString("productId", purchase.getSku());
-    item.putString("transactionId", purchase.getOrderId());
-    item.putString("transactionDate", String.valueOf(purchase.getPurchaseTime()));
-    item.putString("transactionReceipt", purchase.getOriginalJson());
-    item.putString("purchaseToken", purchase.getPurchaseToken());
-    item.putString("dataAndroid", purchase.getOriginalJson());
-    item.putString("signatureAndroid", purchase.getSignature());
-    item.putBoolean("autoRenewingAndroid", purchase.isAutoRenewing());
-    item.putBoolean("isAcknowledgedAndroid", purchase.isAcknowledged());
-    item.putInt("purchaseStateAndroid", purchase.getPurchaseState());
+        promiseItem = item.copy();
+        sendEvent(reactContext, "purchase-updated", item);
+      }
+      if (purchases.size() > 0 && promiseItem != null) {
+        DoobooUtils.getInstance().resolvePromisesForKey(PROMISE_BUY_ITEM, promiseItem);
+      }
+    } else {
+      WritableMap error = Arguments.createMap();
+      error.putInt("responseCode", billingResult.getResponseCode());
+      error.putString("debugMessage", billingResult.getDebugMessage());
+      String[] errorData = DoobooUtils.getInstance().getBillingResponseData(billingResult.getResponseCode());
+      error.putString("code", errorData[0]);
+      error.putString("message", "purchases are null.");
+      sendEvent(reactContext, "purchase-error", error);
+      DoobooUtils.getInstance().rejectPromisesWithBillingError(PROMISE_BUY_ITEM, billingResult.getResponseCode());
+    }
+  }
 
-    sendEvent(reactContext, "purchase-updated", item);
-    DoobooUtils.getInstance().resolvePromisesForKey(PROMISE_BUY_ITEM, item);
+  private void sendUnconsumedPurchases(final Promise promise) {
+    ensureConnection(promise, new Runnable() {
+      @Override
+      public void run() {
+        String[] types = { BillingClient.SkuType.INAPP, BillingClient.SkuType.SUBS };
+
+        for (String type : types) {
+          Purchase.PurchasesResult purchasesResult = billingClient.queryPurchases(type);
+          ArrayList<Purchase> unacknowledgedPurchases = new ArrayList<>();
+
+          if (purchasesResult == null || purchasesResult.getPurchasesList() == null || purchasesResult.getPurchasesList().size() == 0) {
+            continue;
+          }
+          for (Purchase purchase : purchasesResult.getPurchasesList()) {
+            if (!purchase.isAcknowledged()) {
+              unacknowledgedPurchases.add(purchase);
+            }
+          }
+          onPurchasesUpdated(purchasesResult.getBillingResult(), unacknowledgedPurchases);
+        }
+
+        promise.resolve(true);
+      }
+    });
+  }
+
+  @ReactMethod
+  public void startListening(final Promise promise) {
+    sendUnconsumedPurchases(promise);
   }
 
   private void sendEvent(ReactContext reactContext,

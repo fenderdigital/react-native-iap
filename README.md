@@ -25,7 +25,7 @@ react-native-iap
 > ![demo.gif](https://user-images.githubusercontent.com/27461460/52619625-87aa8a80-2ee5-11e9-9aee-6691c34408f3.gif)
 
 <!-- Inline anchors -->
-[a-acknowledge-purchase-android]: #acknowledge-purchase-in-android
+[a-acknowledge-purchase-android]: #finishing-a-purchase
 [a-migration-guide]: #migration-guide
 [a-purchase-flow]: #new-purchase-flow
 
@@ -65,7 +65,10 @@ react-native-iap
 
 Quick News
 ----------
-- Recently, `react-native-iap@^3.*` has been updated very prompty for migration issues.
+- `react-native-iap@4.0.0` has been released. You can see [#716](https://github.com/dooboolab/react-native-iap/pull/716) for updates.
+- ~~For early stages, You can install pre-releases version by running `npm install --save reqct-native-iap@next`~~
+  - `next` package isn't maintained currently. This will be re-opened when there is breaking change comming to support `iap`.
+- In the past, `react-native-iap@^3.*` has been updated very prompty for migration issues.
     Don't get suprised too much on why it is bumping up version so quickly these days.
   1. Migrated to new `AndroidX` APIs.
   2. Migrated to new `Android` billing client which is `> 2.0.0`.
@@ -80,8 +83,9 @@ Breaking Changes
   - Now, you should [acknowledge purchase][a-acknowledge-purchase-android]
       with non-consumable and subscription purchase from `3.0.0`.
       See more about [acknowledgePurchase][android-acknowledge-purchase].
-  - If you are using version `^3.0.* ~ ^3.1.*`, please use `acknowledgePurchase` via [google-api-nodejs-client][].
+  - If you are using version `^3.0.* < ^3.1.0`, please use `acknowledgePurchase` supported in `3.0.3`.
       You can use method like `androidpublisher.purchases.subscriptions.acknowledge`.
+- `3.4.0` introduces a similar flow to consumable purchases on iOS. You should update your code according to the recommended flow and pass `false` to `andDangerouslyFinishTransactionAutomatically` when calling`requestPurchase`.
 
 Configuration of Google Play & iTunes Connect
 ---------------------------------------------
@@ -89,7 +93,7 @@ Configuration of Google Play & iTunes Connect
 
 [Deprecated README][readme-deprecated]
 --------------------------------------
-- If you are using `react-native-iap@^2.*`, please follow above README.
+- If you are using `react-native-iap@^2.*`, please follow the above README.
 
 News on Major Releases
 ----------------------
@@ -100,27 +104,30 @@ News on Major Releases
 Method                                                                                 | Result                    | Description
 ------                                                                                 | ------                    | -----------
 `initConnection()`                                                                     | `Promise<boolean>`        | Init IAP module.<br>On Android this can be called to preload the connection to Play Services.<br>On iOS, it will simply call `canMakePayments` method and return value.
+`purchaseUpdatedListener((purchase: ProductPurchase) => {})`                           | `EmitterSubscription`　　　| Register a callback that gets called when the store has any updates to purchases that have not yet been finished, consumed or acknowledged. Returns a React Native `EmitterSubscription` on which you can call `.remove()` to stop receiving updates. Register you listener as soon as possible and react to updates at all times.
+`purchaseErrorListener((error: PurchaseError) => {})`                                  | `EmitterSubscription`　　　| Register a callback that gets called when there has been an error with a purchase. Returns a React Native `EmitterSubscription` on which you can call `.remove()` to stop receiving updates.
 `getProducts(skus: string[])`<ul><li>skus: array of Product ID/sku</li></ul>           | `Promise<Product[]>`      | Get a list of products (consumable and non-consumable items, but not subscriptions).<br>Note: With before `iOS 11.2`, this method _will_ also return subscriptions if they are included in your list of SKUs. This is because we cannot differentiate between IAP products and subscriptions prior to `iOS 11.2`.
 `getSubscriptions(skus: string[])`<ul><li>skus: array of Subscription ID/sku</li></ul> | `Promise<Subscription[]>` | Get a list of subscriptions.<br>Note: With before `iOS 11.2`, this method _will_ also return products if they are included in your list of SKUs. This is because we cannot differentiate between IAP products and subscriptions prior to `iOS 11.2`.
 `getPurchaseHistory()`                                                                 | `Promise<Purchase>`       | Gets an inventory of purchases made by the user regardless of consumption status (where possible).
 `getAvailablePurchases()`                                                              | `Promise<Purchase[]>`     | Get all purchases made by the user (either non-consumable, or haven't been consumed yet.
-_*deprecated_<br>~~`buyProduct(sku: string)`~~<ul><li>sku: product ID/sku</li></ul>    | `Promise<Purchase>`       | Buy a product.
-`requestPurchase(sku: string)`<ul><li>sku: product ID/sku</li></ul>                    | `Promise<Purchase>`       | Request a purchase.<br>`purchaseUpdatedListener` will receive the result.
-_*deprecated_<br>~~`buyProductWithQuantityIOS(sku: string, quantity: number)`~~<ul><li>sku: product ID/sku</li><li>quantity: Quantity</li></ul> | `Promise<Purchase>` | **iOS only**<br>Buy a product with a specified quantity.
-`requestPurchaseWithQuantityIOS(sku: string, quantity: number)`<ul><li>sku: product ID/sku</li><li>quantity: Quantity</li></ul>                 | `Promise<Purchase>` | **iOS only**<br>Buy a product with a specified quantity.<br>`purchaseUpdatedListener` will receive the result
-_*deprecated_<br>~~`buySubscription(sku: string)`~~<ul><li>sku: subscription ID/sku</li></ul> | `Promise<Purchase>` | Create (buy) a subscription to a sku.
-`requestSubscription(sku: string)`<ul><li>sku: subscription ID/sku</li></ul>                  | `Promise<string>`   | Create (buy) a subscription to a sku.
+`requestPurchase(sku: string, andDangerouslyFinishTransactionAutomatically: boolean)`<ul><li>sku: product ID/sku</li></ul>                    | `void`       | Request a purchase.<br>`purchaseUpdatedListener` will receive the result.<br/> `andDangerouslyFinishTransactionAutomatically` defaults to `true` for backwards compatibility but this is deprecated and you should set it to false once you're [manually finishing your transactions][a-purchase-flow].
+`requestPurchaseWithQuantityIOS(sku: string, quantity: number)`<ul><li>sku: product ID/sku</li><li>quantity: Quantity</li></ul>                 | `void` | **iOS only**<br>Buy a product with a specified quantity.<br>`purchaseUpdatedListener` will receive the result
+_*deprecated_<br>~~`buySubscription(sku: string)`~~<ul><li>sku: subscription ID/sku</li></ul> | `void` | Create (buy) a subscription to a sku.
+`requestSubscription(sku: string, andDangerouslyFinishTransactionAutomaticallyIOS: boolean, oldSkuAndroid: string, prorationModeAndroid: string, developerIdAndroid: string, userIdAndroid: string)`<ul><li>sku: subscription ID/sku</li></ul>                  | `void`   | Create (buy) a subscription to a sku.
 `clearTransactionIOS()` | `void`            | **iOS only**<br>Clear up the unfinished transanction which sometimes causes problem.<br>Read more in below README.
 `clearProductsIOS()`    | `void`            | **iOS only**<br>Clear all products and subscriptions.<br>Read more in below README.
-`requestReceiptIOS()`   | `Promise<string>` | **iOS only**<br>Get the current receipt.
+`getReceiptIOS()`   | `Promise<string>` | **iOS only**<br>Get the current receipt.
+`getPendingPurchasesIOS()` | `Promise<ProductPurchase[]>` | **IOS only**<br>Gets all the transactions which are pending to be finished.
 `validateReceiptIos(body: Object, devMode: boolean)`<ul><li>body: receiptBody</li><li>devMode: isTest</li></ul> | `Object\|boolean` | **iOS only**<br>Validate receipt.
 `endConnectionAndroid()`   | `Promise<void>` | **Android only**<br>End billing connection.
 `consumeAllItemsAndroid()` | `Promise<void>` | **Android only**<br>Consume all items so they are able to buy again.
-`acknowledgePurchaseAndroid(token: string, payload?: string)`<ul><li>token: purchase token</li><li>payload: developerPayload</li></ul> | `Promise<PurchaseResult>` | **Android only**<br>Acknowledge a product.
-`consumePurchaseAndroid(token: string, payload?: string)`<ul><li>token: purchase token</li><li>payload: developerPayload</li></ul>     | `Promise<PurchaseResult>` | **Android only**<br>Consume a product.
+`consumePurchaseAndroid(token: string, payload?: string)`<ul><li>token: purchase token</li><li>payload: developerPayload</li></ul>     | `void` | **Android only**<br>Finish a purchase. All purchases should be finished once you have delivered the purchased items. E.g. by recording the purchase in your database or on your server.
+`acknowledgePurchaseAndroid(token: string, payload?: string)`<ul><li>token: purchase token</li><li>payload: developerPayload</li></ul> | `Promise<PurchaseResult>` | **Android only**<br>Acknowledge a product. Like above for non-consumables.
+`consumePurchaseAndroid(token: string, payload?: string)`<ul><li>token: purchase token</li><li>payload: developerPayload</li></ul>     | `Promise<PurchaseResult>` | **Android only**<br>Consume a product. Like above for consumables.
 _*deprecated_<br>~~`buySubscription(sku: string, prevSku?: string, mode?: number)`~~<ul><li>sku: subscription ID/sku</li><li>prevSku: old subscription ID/sku (optional)</li><li>mode: proration mode (optional)</li></ul> | `Promise<Purchase>` | **Android only**<br>Create (buy) a subscription to a sku.<br>For upgrading/downgrading subscription on Android pass the second parameter with current subscription ID, on iOS this is handled automatically by store.<br>You can also optionally pass in a proration mode integer for upgrading/downgrading subscriptions on Android
 `requestSubscription(sku: string, prevSku?: string, mode?: number)`<ul><li>sku: subscription ID/sku</li><li>prevSku: old subscription ID/sku (optional)</li><li>mode: proration mode (optional)</li></ul>                  | `Promise<string>`   | **Android only**<br>Create (buy) a subscription to a sku.<br>For upgrading/downgrading subscription on Android pass the second parameter with current subscription ID, on iOS this is handled automatically by store.<br>You can also optionally pass in a proration mode integer for upgrading/downgrading subscriptions on Android
 `validateReceiptAndroid(bundleId: string, productId: string, productToken: string, accessToken: string)`<br><ul><li>bundleId: the packageName</li><li>productId: productId</li><li>productToken: productToken</li><li>accessToken: accessToken</li><li>isSubscription: isSubscription</li></ul> | `Object\|boolean` | **Android only**<br>Validate receipt.
+
 
 </details>
 
@@ -137,18 +144,67 @@ Getting Started
 `$ npm install --save react-native-iap`
 
 ### Mostly automatic installation
+
+#### Using React Native >= 0.60
+Linking the package manually is not required anymore with [Autolinking](https://github.com/react-native-community/cli/blob/master/docs/autolinking.md).
+
+- **iOS Platform:**
+
+  `$ cd ios && pod install && cd ..` # CocoaPods on iOS needs this extra step
+
+- **Android Platform with Android Support:**
+
+  Using [Jetifier tool](https://github.com/mikehardy/jetifier) for backward-compatibility.
+
+  Modify your **android/build.gradle** configuration:
+  ```
+  buildscript {
+    ext {
+      buildToolsVersion = "28.0.3"
+      minSdkVersion = 16
+      compileSdkVersion = 28
+      targetSdkVersion = 28
+      # Only using Android Support libraries
+      supportLibVersion = "28.0.0"
+    }
+  ```
+
+- **Android Platform with AndroidX:**
+
+  Modify your **android/build.gradle** configuration:
+  ```
+  buildscript {
+    ext {
+      buildToolsVersion = "28.0.3"
+      minSdkVersion = 16
+      compileSdkVersion = 28
+      targetSdkVersion = 28
+      # Remove 'supportLibVersion' property and put specific versions for AndroidX libraries
+      androidXAnnotation = "1.1.0"
+      androidXBrowser = "1.0.0"
+      // Put here other AndroidX dependencies
+    }
+  ```
+
+#### Using React Native < 0.60
+
 `$ react-native link react-native-iap`
 
 ### Manual installation
 
 #### iOS
-1. In XCode, in the project navigator, right-click `Libraries` ➜ `Add Files to [your project's name]`
+1. In XCode, in the project navigator, right click `Libraries` ➜ `Add Files to [your project's name]`
 2. Go to `node_modules` ➜ `react-native-iap` and add `RNIap.xcodeproj`
-3. In XCode, in the project navigator, select your project. Add `libRNIap.a`
-    to your project's `Build Phases` ➜ `Link Binary With Libraries`
-4. Run your project (`Cmd+R`)
+3. In XCode, in the project navigator, select your project. Add `libRNIap.a` to your project's `Build Phases` ➜ `Link Binary With Libraries`
+4. Run your project (`Cmd+R`)<
+
+#### iOS with Podfile
+1. Open up `ios/Podfile`
+  - Add `pod 'RNIap', :path => '../node_modules/react-native-iap'`
+2. Run `pod install`
 
 #### Android
+
 1. Open up `android/app/src/main/java/[...]/MainApplication.java`
     - Add `import com.dooboolab.RNIap.RNIapPackage;` to the imports at the top of the file
     - Add `new RNIapPackage()` to the list returned by the `getPackages()` method
@@ -161,14 +217,24 @@ Getting Started
     ```gradle
     compile project(':react-native-iap')
     ```
-4. Add the following to the `<permission>` block in `android/app/src/main/AndroidManifest.xml`:
-    ```xml
-    <uses-permission android:name="com.android.vending.BILLING" />
+4. Update ProGuard config (Optional)
+  - Append the following lines to your ProGuard config (`proguard-rules.pro`)
     ```
+    -keepattributes *Annotation*
+    -keepclassmembers class ** {
+      @org.greenrobot.eventbus.Subscribe <methods>;
+    }
+    -keep enum org.greenrobot.eventbus.ThreadMode { *; }
+    ```
+5. Add the following to the `<permission>` block in `android/app/src/main/AndroidManifest.xml`:
+  ```xml
+  <uses-permission android:name="com.android.vending.BILLING" />
+  ```
 
-Migration Guide
----------------
-To migrate to `3.1.0` you must migrate your Android app to AndroidX by following the [Migrating to AndroidX Guide][android-migrate-androidx].
+### Migrating to 3.4.0
+
+- Upgrade to the new [purchase flow][a-purchase-flow].
+- There is no longer any need to call endConnection on Android as this is done automatically.
 
 Usage
 -----
@@ -242,38 +308,26 @@ Property                                 | iOS | And | Comment
 `introductoryPricePeriodAndroid`         |     | ✓   | The billing period of the introductory price, specified in ISO 8601 format.
 `freeTrialPeriodAndroid`                 |     | ✓   | Trial period configured in Google Play Console, specified in ISO 8601 format. For example, P7D equates to seven days.
 
-End Billing Connection
-----------------------
-When you are done with the billing, you should release it for Android[<sup>\[1\]</sup>][android-end-connection].
-
-It is not needed in iOS. No need to check platform either since nothing will
-happen in iOS.
-
-This can be used in `componentWillUnmount`.
-
-```javascript
-  async componentWillUnmount() {
-    await RNIap.endConnectionAndroid();
-  }
-```
-
 Purchase
 --------
 > The flow of the `purchase` has been renewed by the founding in issue [#307][issue-307].
-> I've decided to redesign this `Purchase Flow` not relying on the `Promise` or `Callback`.
-> There are some reasons not to approach in this way.
+> I've decided to redesign the `Purchase Flow` to not rely on `Promise` or `Callback`.
+> There are some reasons not to approach in this way:
 
-1. There may be more than one responses when requesting a payment.
-2. The purchase responses are `asynchronuous` which means request that's made
-    beforehand may not complete at first.
-3. The purchase may be pended and hard to track what has been done ([example][issue-307-c1]).
-4. Billing Flow is more like and `events` rather than `callback` pattern.
+1. There may be more than one response when requesting a payment.
+2. Purchases are inter-session `asynchronuous` meaning requests that are made may take several hours
+   to complete and continue to exist even after the app has been closed or crashed.
+3. The purchase may be pending and hard to track what has been done ([example][issue-307-c1]).
+4. Thus the Billing Flow is an `event` pattern than a `callback` pattern.
 
-Once you have called `getProducts()`, and you have a valid response, you can call `buyProduct()`.
+Once you have called `getProducts()`, and you have a valid response, you can call `requestPurchase()`.
 Subscribable products can be purchased just like consumable products and users
 can cancel subscriptions by using the iOS System Settings.
 
 Before you request any purchase, you should set `purchaseUpdatedListener` from `react-native-iap`.
+It is recommended that you start listening to updates as soon as your application launches. And don't
+forget that even at launch you may receive successful purchases that either completed while your app was
+closed or that failed to be finished, consumed or acknowledged due to network errors or bugs.
 
 ```javascript
 import RNIap, {
@@ -283,14 +337,36 @@ import RNIap, {
   type PurchaseError
 } from 'react-native-iap';
 
-class ExampleComponent extends Component<*> {
+class RootComponent extends Component<*> {
   purchaseUpdateSubscription = null
   purchaseErrorSubscription = null
 
   componentDidMount() {
-    this.purchaseUpdateSubscription = purchaseUpdatedListener((purchase: ProductPurchase) => {
+    this.purchaseUpdateSubscription = purchaseUpdatedListener((purchase: InAppPurchase | SubscriptionPurchase | ProductPurchase ) => {
       console.log('purchaseUpdatedListener', purchase);
-      this.setState({ receipt: purchase.transactionReceipt }, () => this.goNext());
+      const receipt = purchase.transactionReceipt;
+      if (receipt) {
+        yourAPI.deliverOrDownloadFancyInAppPurchase(purchase.transactionReceipt)
+        .then((deliveryResult) => {
+          if (isSuccess(deliveryResult)) {
+            // Tell the store that you have delivered what has been paid for.
+            // Failure to do this will result in the purchase being refunded on Android and
+            // the purchase event will reappear on every relaunch of the app until you succeed
+            // in doing the below. It will also be impossible for the user to purchase consumables
+            // again untill you do this.
+            if (Platform.OS === 'ios') {
+              RNIap.finishTransactionIOS(purchase.transactionId);
+            } else if (Platform.OS === 'android') {
+              // If consumable (can be purchased again)
+              RNIap.consumePurchaseAndroid(purchase.purchaseToken);
+              // If not consumable
+              RNIap.acknowledgePurchaseAndroid(purchase.purchaseToken);
+            }
+          } else {
+            // Retry / conclude the purchase is fraudulent, etc...
+          }
+        });
+      }
     });
 
     this.purchaseErrorSubscription = purchaseErrorListener((error: PurchaseError) => {
@@ -316,7 +392,7 @@ Then define the method like below and call it when user press the button.
 ```javascript
   requestPurchase = async (sku: string) => {
     try {
-      await RNIap.requestPurchase(sku);
+      await RNIap.requestPurchase(sku, false);
     } catch (err) {
       console.warn(err.code, err.message);
     }
@@ -339,64 +415,35 @@ Then define the method like below and call it when user press the button.
 
 New Purchase Flow
 -----------------
-![purchase-flow-sequence](https://user-images.githubusercontent.com/27461460/59160427-d1605600-8b10-11e9-9ca9-80fd2c08fd86.png)
+![purchase-flow-sequence](docs/react-native-iapv3.svg)
 
 Most likely, you'll want to handle the “store kit flow”[<sup>\[2\]</sup>][apple-store-kit-flow],
 which happens when a user successfully pays after solving a problem with his
 or her account – for example, when the credit card information has expired.
 
-In this scenario, the initial call to `RNIap.buyProduct()` would fail and you'd
-need to add `addAdditionalSuccessPurchaseListenerIOS` to handle the successful
-purchase previously.
+For above reason, we decided to remove ~~`buyProduct`~~ and use `requestPurchase` instead which doesn't rely on promise function. The `purchaseUpdatedListener` will receive the success purchase and `purchaseErrorListener` will receive all the failure result that occured during the purchase attempt.
 
-We are planning to _remove_ `additionalSuccessPurchaseListenerIOS` in future
-releases so avoid using it.
-Approach of new purchase flow will prevent such issue in [#307][issue-307] which
-was privided in `2.4.*`.
+Finishing a Purchase
+----------------------
+Purchases will keep being emitted to your `purchaseUpdatedListener` on every app relaunch until you finish the purchase.
 
-Acknowledge Purchase in Android
--------------------------------
-In new Android billing client which is `2.0.*` currently, you should acknowledge
-purchases or else they will be cancelled automatically after 3 days (or
-5 minutes in license test environment).
+Consumable purchases should be consumed by calling `consumePurchaseAndroid()` or `finishTransactionIOS()`.
+Once an item is consumed, it will be removed from `getAvailablePurchases()` so it is up to you
+to record the purchase into your database before calling `consumePurchaseAndroid()` or `finishTransactionIOS()`.
 
-See [example][example] project and get idea on how to handle these.
+Non-consumable purchases need to be acknowledged on Android, or they will be automatically refunded after 
+a few days. Acknowledge a purchase when you have delivered it to your user by calling `acknowledgePurchaseAndroid()`.
+On iOS non-consumable purchases are finished automatically but this will change in the future so it is recommended that you prepare by simply calling `finishTransactionIOS()` on non-consumables as well.
 
-```javascript
-  componentDidMount () {
-    this.purchaseUpdateSubscription = purchaseUpdatedListener(async (purchase: ProductPurchase) => {
-      console.log('purchaseUpdatedListener', purchase);
-      if (purchase.purchaseStateAndroid === 1 && !purchase.isAcknowledgedAndroid) {
-        try {
-          const ackResult = await RNIap.acknowledgePurchaseAndroid(purchase.purchaseToken);
-          console.log('ackResult', ackResult);
-          this.setState({ receipt: purchase.transactionReceipt }, () => this.goNext());
-        } catch (error) {
-          console.warn('ackErr', error);
-        }
-      }
-    });
-  }
-```
-
-Consumption and Restoring Purchases
+Restoring Purchases
 -----------------------------------
 You can use `getAvailablePurchases()` to do what's commonly understood as “restoring” purchases.
 
-Once an item is consumed, it will no longer be available in `getAvailablePurchases()`
-and will only be available via `getPurchaseHistory()`.
-However, this method has some caveats on Android – namely, that purchase history
-only exists for the single most recent purchase of each SKU – so your best bet
-is to track consumption in your app yourself.
-
-By default, all items that are purchased will not be consumed unless they are
-automatically consumed by the store (for example, if you create a consumable
-item for iOS).
-This means that you must manage consumption yourself.
-
-Purchases can be consumed by calling `consumePurchaseAndroid()`.
-If you want to consume all items, you have to iterate over the purchases
-returned by `getAvailablePurchases()`.
+If for debugging you want to consume all items, you have to iterate over the purchases
+returned by `getAvailablePurchases()`. Beware that if you consume an item without having 
+recorded the purchase in your database the user may have paid for something without getting
+it delivered and you will have no way to recover the receipt to validate and restore their 
+purchase.
 
 ```javascript
   getPurchases = async () => {
@@ -487,7 +534,7 @@ Sometimes you will need to get the receipt at times other than after purchase.
 For example, when a user needs to ask for permission to buy a product (`Ask to buy`
 flow) or unstable internet connections.
 
-For these cases we have a convenience method `requestReceiptIOS()` which gets
+For these cases we have a convenience method `getReceiptIOS()` which gets
 the latest receipt for the app at any given time. The response is base64 encoded.
 
 ### iOS Purchasing process right way.
@@ -511,8 +558,29 @@ Issue regarding `valid products`
     `clearProducts()`, and do the fetching job again, and you will receive what
     you expected.
 
+### Example backend (Node.js)
+
+[Here](https://github.com/mifi/in-app-subscription-example) you can find an example backend for idempotent validating of receipts on both iOS/Android and storing and serving subscription state to the client.
+
 Q & A
 -----
+#### How can a user cancel a subscription in my app?
+- For both iOS and Android your users cannot cancel subscriptions inside your app. You need to direct your users to iTunes/the App Store or Google Play.
+
+- You can do this on iOS:
+    ```javascript
+    Linking.openURL('https://buy.itunes.apple.com/WebObjects/MZFinance.woa/wa/manageSubscriptions')
+    ```
+
+- You can do this on Android:
+    ```javascript
+    Linking.openURL('https://play.google.com/store/account/subscriptions?package=YOUR_PACKAGE_NAME&sku=YOUR_PRODUCT_ID
+    ```
+    (change `YOUR_PACKAGE_NAME` and `YOUR_PRODUCT_ID`)
+
+- More on `Linking` in React Native: https://facebook.github.io/react-native/docs/linking
+
+
 #### Can I buy product right away skipping fetching products if I already know productId?
 - You could only in Android in `react-native-iap@^2.*`.
 
