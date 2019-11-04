@@ -666,6 +666,10 @@ export const getPendingPurchasesIOS = (): Promise<ProductPurchase[]> => {
   }
 };
 
+/**
+ * Get the pending purchases in IOS.
+ * @returns {Promise<Subscription[] | Product[]>}
+ */
 export const listOwnedProducts = (
   type
 ): Promise<Subscription[] | Product[]> => {

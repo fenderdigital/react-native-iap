@@ -512,20 +512,18 @@ public class RNIapModule extends ReactContextBaseJavaModule implements Purchases
     if (purchases != null) {
       WritableMap promiseItem = null;
       for (Purchase purchase : purchases) {
-        WritableMap item = Arguments.createMap();
-        item.putString("productId", purchase.getSku());
-        item.putString("transactionId", purchase.getOrderId());
-        item.putDouble("transactionDate", purchase.getPurchaseTime());
-        item.putString("transactionReceipt", purchase.getOriginalJson());
-        item.putString("purchaseToken", purchase.getPurchaseToken());
-        item.putString("dataAndroid", purchase.getOriginalJson());
-        item.putString("signatureAndroid", purchase.getSignature());
-        item.putBoolean("autoRenewingAndroid", purchase.isAutoRenewing());
-        item.putBoolean("isAcknowledgedAndroid", purchase.isAcknowledged());
-        item.putInt("purchaseStateAndroid", purchase.getPurchaseState());
+        promiseItem.putString("productId", purchase.getSku());
+        promiseItem.putString("transactionId", purchase.getOrderId());
+        promiseItem.putDouble("transactionDate", purchase.getPurchaseTime());
+        promiseItem.putString("transactionReceipt", purchase.getOriginalJson());
+        promiseItem.putString("purchaseToken", purchase.getPurchaseToken());
+        promiseItem.putString("dataAndroid", purchase.getOriginalJson());
+        promiseItem.putString("signatureAndroid", purchase.getSignature());
+        promiseItem.putBoolean("autoRenewingAndroid", purchase.isAutoRenewing());
+        promiseItem.putBoolean("isAcknowledgedAndroid", purchase.isAcknowledged());
+        promiseItem.putInt("purchaseStateAndroid", purchase.getPurchaseState());
 
-        promiseItem = item.copy();
-        sendEvent(reactContext, "purchase-updated", item);
+        sendEvent(reactContext, "purchase-updated", promiseItem);
       }
       if (purchases.size() > 0 && promiseItem != null) {
         DoobooUtils.getInstance().resolvePromisesForKey(PROMISE_BUY_ITEM, promiseItem);
