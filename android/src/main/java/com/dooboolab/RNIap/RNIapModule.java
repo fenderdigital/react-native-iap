@@ -512,6 +512,7 @@ public class RNIapModule extends ReactContextBaseJavaModule implements Purchases
     if (purchases != null) {
       WritableMap promiseItem = null;
       for (Purchase purchase : purchases) {
+        promiseItem = Arguments.createMap();
         promiseItem.putString("productId", purchase.getSku());
         promiseItem.putString("transactionId", purchase.getOrderId());
         promiseItem.putDouble("transactionDate", purchase.getPurchaseTime());
