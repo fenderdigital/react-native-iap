@@ -645,3 +645,30 @@ export const getPendingPurchasesIOS = async (): Promise<ProductPurchase[]> =>
  */
 export const presentCodeRedemptionSheetIOS = async (): Promise<null> =>
   getIosModule().presentCodeRedemptionSheet();
+
+  /**
+ * Get the pending purchases in IOS.
+ * @returns {Promise<Subscription[] | Product[]>}
+ */
+export const listOwnedProducts = (
+  type
+): Promise<Subscription[] | Product[]> => {
+  return Platform.select({
+    ios: async () => Promise.resolve(),
+    android: async () => {
+      return RNIapModule.listOwnedProducts(type);
+    }
+  })();
+};
+
+export const getSubscriptionTransactionDetails = sku => {
+  Platform.select({
+    ios: async () => Promise.resolve(),
+    android: async () => {
+      if (!RNIapModule) {
+        return Promise.resolve();
+      }
+      return RNIapModule.getSubscriptionTransactionDetails(sku);
+    }
+  })();
+};

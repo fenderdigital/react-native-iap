@@ -269,7 +269,7 @@ public class RNIapModule extends ReactContextBaseJavaModule implements Purchases
                   item.putString("price", price);
                   item.putString("currency", skuDetails.getPriceCurrencyCode());
                   item.putString("type", skuDetails.getType());
-                  item.putString("localizedPrice", skuDetails.getPrice());
+                  item.putString("priceText", skuDetails.getPrice());
                   item.putString("title", skuDetails.getTitle());
                   item.putString("description", skuDetails.getDescription());
                   item.putString("introductoryPrice", skuDetails.getIntroductoryPrice());
@@ -583,9 +583,8 @@ public class RNIapModule extends ReactContextBaseJavaModule implements Purchases
       error.putString("message", errorData[1]);
       sendEvent(reactContext, "purchase-error", error);
 
-      if (responseCode != BillingClient.BillingResponseCode.USER_CANCELED) {
-        PlayUtils.getInstance().rejectPromisesWithBillingError(PROMISE_BUY_ITEM, responseCode);
-      }
+      PlayUtils.getInstance().rejectPromisesWithBillingError(PROMISE_BUY_ITEM, responseCode);
+
       return;
     }
 
@@ -676,4 +675,77 @@ public class RNIapModule extends ReactContextBaseJavaModule implements Purchases
         .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
         .emit(eventName, params);
   }
+
+  @ReactMethod
+  public void isSubscribed(final String sku, final Promise promise) {
+    ensureConnection(promise, billingClient -> {
+      billingClient.queryPurchaseHistoryAsync( BillingClient.SkuType.SUBS, (billingResult, list) -> {
+        WritableMap item = Arguments.createMap();
+        for (int i = 0; i < list.size(); i++) {
+          PurchaseHistoryRecord purchase = list.get(i);
+          if (purchase.getSkus().get(0).equalsIgnoreCase(sku)) {
+            promise.resolve(true);
+            return;
+          }
+        }
+        promise.resolve(false);
+      });
+    });
+  }
+
+
+  @ReactMethod
+  public void getSubscriptionTransactionDetails(final String sku, final Promise promise) {
+    ensureConnection(promise, billingClient -> {
+      billingClient.queryPurchasesAsync( BillingClient.SkuType.SUBS, (billingResult, list) -> {
+        WritableMap item = Arguments.createMap();
+        Purchase purchase = list.get(0);
+        if (purchase.getSkus().get(0).equalsIgnoreCase(sku)) {
+          item.putString("productId", purchase.getSkus().get(0));
+          item.putString("orderId", purchase.getOrderId());
+          item.putString("purchaseToken", purchase.getPurchaseToken());
+          item.putString("purchaseTime", String.valueOf(purchase.getPurchaseTime()));
+          item.putString("transactionReceipt", purchase.getOriginalJson());
+          item.putString("purchaseToken", purchase.getPurchaseToken());
+          item.putString("dataAndroid", purchase.getOriginalJson());
+          item.putString("signatureAndroid", purchase.getSignature());
+        }
+        promise.resolve(item);
+
+      });
+
+    });
+
+  }
+
+  @ReactMethod
+  public void listOwnedProducts(final String type, final Promise promise) {
+    ensureConnection(promise, billingClient -> {
+      billingClient.queryPurchasesAsync( 
+        type, 
+        (billingResult, list) -> {
+          List<Purchase> purchases = list;
+          WritableArray items = Arguments.createArray();
+
+          for(int i = 0; i < purchases.size(); i ++) {
+            Purchase purchase = purchases.get(i);
+            WritableMap item = Arguments.createMap();
+            item.putString("productId", purchase.getSkus().get(0));
+            item.putString("orderId", purchase.getOrderId());
+            item.putString("purchaseToken", purchase.getPurchaseToken());
+            item.putString("purchaseTime", String.valueOf(purchase.getPurchaseTime()));
+            item.putString("transactionReceipt", purchase.getOriginalJson());
+            item.putString("purchaseToken", purchase.getPurchaseToken());
+            item.putString("dataAndroid", purchase.getOriginalJson());
+            item.putString("signatureAndroid", purchase.getSignature());
+            if (type.equals(BillingClient.SkuType.SUBS)) {
+              item.putBoolean("autoRenewingAndroid", purchase.isAutoRenewing());
+            }
+            items.pushMap(item);
+          }
+          promise.resolve(items);
+      });
+    });
+  }
+
 }
