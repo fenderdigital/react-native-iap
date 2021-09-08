@@ -12,7 +12,7 @@
     "skipLibCheck": true,
     "allowSyntheticDefaultImports": true,
     "declaration": true,
-    "strict": true
+    "strict": false
   },
   "compileOnSave": true,
   "exclude": ["node_modules"],
