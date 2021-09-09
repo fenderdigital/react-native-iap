@@ -680,15 +680,24 @@ public class RNIapModule extends ReactContextBaseJavaModule implements Purchases
   public void isSubscribed(final String sku, final Promise promise) {
     ensureConnection(promise, billingClient -> {
       billingClient.queryPurchaseHistoryAsync( BillingClient.SkuType.SUBS, (billingResult, list) -> {
-        WritableMap item = Arguments.createMap();
-        for (int i = 0; i < list.size(); i++) {
-          PurchaseHistoryRecord purchase = list.get(i);
-          if (purchase.getSkus().get(0).equalsIgnoreCase(sku)) {
-            promise.resolve(true);
-            return;
+        if (list != null) {
+          try {
+            WritableMap item = Arguments.createMap();
+            for (int i = 0; i < list.size(); i++) {
+              PurchaseHistoryRecord purchase = list.get(i);
+              if (purchase.getSkus().get(0).equalsIgnoreCase(sku)) {
+                promise.resolve(true);
+              return;
+              }
+            }
+            promise.resolve(false);
+          } catch(Exception e) {
+            Log.e(TAG, e.getMessage());
+            promise.resolve(false);
           }
+        } else {
+          promise.resolve(false);
         }
-        promise.resolve(false);
       });
     });
   }
@@ -698,22 +707,34 @@ public class RNIapModule extends ReactContextBaseJavaModule implements Purchases
   public void getSubscriptionTransactionDetails(final String sku, final Promise promise) {
     ensureConnection(promise, billingClient -> {
       billingClient.queryPurchasesAsync( BillingClient.SkuType.SUBS, (billingResult, list) -> {
-        WritableMap item = Arguments.createMap();
-        Purchase purchase = list.get(0);
-        if (purchase.getSkus().get(0).equalsIgnoreCase(sku)) {
-          item.putString("productId", purchase.getSkus().get(0));
-          item.putString("orderId", purchase.getOrderId());
-          item.putString("purchaseToken", purchase.getPurchaseToken());
-          item.putString("purchaseTime", String.valueOf(purchase.getPurchaseTime()));
-          item.putString("transactionReceipt", purchase.getOriginalJson());
-          item.putString("purchaseToken", purchase.getPurchaseToken());
-          item.putString("dataAndroid", purchase.getOriginalJson());
-          item.putString("signatureAndroid", purchase.getSignature());
+        if (list != null) {
+          try {
+            WritableMap item = Arguments.createMap();
+            Purchase purchase = list.get(0);
+            if (purchase.getSkus().get(0).equalsIgnoreCase(sku)) {
+              item.putString("productId", purchase.getSkus().get(0));
+              item.putString("orderId", purchase.getOrderId());
+              item.putString("purchaseToken", purchase.getPurchaseToken());
+              item.putString("purchaseTime", String.valueOf(purchase.getPurchaseTime()));
+              item.putString("transactionReceipt", purchase.getOriginalJson());
+              item.putString("purchaseToken", purchase.getPurchaseToken());
+              item.putString("dataAndroid", purchase.getOriginalJson());
+              item.putString("signatureAndroid", purchase.getSignature());
+            }
+            if (purchase == null) {
+              promise.resolve(null);
+            } else {
+              promise.resolve(item); 
+            }
+          } catch(Exception e) {
+            Log.e(TAG, e.getMessage());
+            promise.resolve(false);
+          }
+        } else {
+          promise.resolve(false);
         }
-        promise.resolve(item);
-
       });
-
+    
     });
 
   }
@@ -724,26 +745,39 @@ public class RNIapModule extends ReactContextBaseJavaModule implements Purchases
       billingClient.queryPurchasesAsync( 
         type, 
         (billingResult, list) -> {
-          List<Purchase> purchases = list;
-          WritableArray items = Arguments.createArray();
-
-          for(int i = 0; i < purchases.size(); i ++) {
-            Purchase purchase = purchases.get(i);
-            WritableMap item = Arguments.createMap();
-            item.putString("productId", purchase.getSkus().get(0));
-            item.putString("orderId", purchase.getOrderId());
-            item.putString("purchaseToken", purchase.getPurchaseToken());
-            item.putString("purchaseTime", String.valueOf(purchase.getPurchaseTime()));
-            item.putString("transactionReceipt", purchase.getOriginalJson());
-            item.putString("purchaseToken", purchase.getPurchaseToken());
-            item.putString("dataAndroid", purchase.getOriginalJson());
-            item.putString("signatureAndroid", purchase.getSignature());
-            if (type.equals(BillingClient.SkuType.SUBS)) {
-              item.putBoolean("autoRenewingAndroid", purchase.isAutoRenewing());
+          if (list != null) {
+            try {
+              List<Purchase> purchases = list;
+              WritableArray items = Arguments.createArray();
+              for(int i = 0; i < purchases.size(); i ++) {
+                Purchase purchase = purchases.get(i);
+                WritableMap item = Arguments.createMap();
+                item.putString("productId", purchase.getSkus().get(0));
+                item.putString("orderId", purchase.getOrderId());
+                item.putString("purchaseToken", purchase.getPurchaseToken());
+                item.putString("purchaseTime", String.valueOf(purchase.getPurchaseTime()));
+                item.putString("transactionReceipt", purchase.getOriginalJson());
+                item.putString("purchaseToken", purchase.getPurchaseToken());
+                item.putString("dataAndroid", purchase.getOriginalJson());
+                item.putString("signatureAndroid", purchase.getSignature());
+                if (type.equals(BillingClient.SkuType.SUBS)) {
+                  item.putBoolean("autoRenewingAndroid", purchase.isAutoRenewing());
+                }
+                items.pushMap(item);
+              }
+              if (purchases.size() == 0) {
+                promise.resolve(false);
+              } else {
+                promise.resolve(items);
+              }
+            } catch(Exception e) {
+                Log.e(TAG, e.getMessage());
+                promise.resolve(false);
             }
-            items.pushMap(item);
+          } else {
+            promise.resolve(false);
           }
-          promise.resolve(items);
+
       });
     });
   }
