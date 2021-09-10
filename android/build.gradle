@@ -1,15 +1,12 @@
 
 buildscript {
   repositories {
-    maven {
-      url 'https://maven.google.com/'
-      name 'Google'
-    }
-    jcenter()
+    google()
+    mavenCentral()
   }
 
   dependencies {
-    classpath 'com.android.tools.build:gradle:3.3.1'
+    classpath 'com.android.tools.build:gradle:4.2.2'
   }
 }
 
@@ -19,14 +16,14 @@ def safeExtGet(prop, fallback) {
     rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
 }
 
-def DEFAULT_COMPILE_SDK_VERSION = 28
-def DEFAULT_BUILD_TOOLS_VERSION = "28.0.3"
+def DEFAULT_COMPILE_SDK_VERSION = 30
+def DEFAULT_BUILD_TOOLS_VERSION = "30.0.2"
 def DEFAULT_MIN_SDK_VERSION = 16
-def DEFAULT_TARGET_SDK_VERSION = 28
+def DEFAULT_TARGET_SDK_VERSION = 30
+def DEFAULT_PLAY_SERVICES_VERSION = "17.6.0"
 
 android {
   compileSdkVersion safeExtGet("compileSdkVersion", DEFAULT_COMPILE_SDK_VERSION)
-  buildToolsVersion safeExtGet("buildToolsVersion", DEFAULT_BUILD_TOOLS_VERSION)
 
   defaultConfig {
     minSdkVersion safeExtGet('minSdkVersion', DEFAULT_MIN_SDK_VERSION)
@@ -37,24 +34,30 @@ android {
   lintOptions {
     abortOnError false
   }
-
-  testOptions {
-    unitTests.returnDefaultValues = true
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_1_8
+    targetCompatibility JavaVersion.VERSION_1_8
+  }
+  flavorDimensions "store"
+  productFlavors {
+    play{
+      dimension "store"
+    }
   }
 }
 
 repositories {
+  google()
   mavenCentral()
-  maven {
-    url 'https://maven.google.com/'
-    name 'Google'
-  }
   jcenter()
 }
 
 dependencies {
   implementation 'com.facebook.react:react-native:+'
-  implementation 'com.android.billingclient:billing:2.0.3'
+  playImplementation 'com.android.billingclient:billing:4.0.0'
+  def playServicesVersion = safeExtGet('playServicesVersion', DEFAULT_PLAY_SERVICES_VERSION)
+  playImplementation "com.google.android.gms:play-services-base:$playServicesVersion"
+
   def supportLibVersion = safeExtGet('supportLibVersion', safeExtGet('supportVersion', null))
   def androidXVersion = safeExtGet('androidXVersion', null)
   if (supportLibVersion && androidXVersion == null) {

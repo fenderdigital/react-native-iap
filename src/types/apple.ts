@@ -200,25 +200,25 @@ export interface ReceiptValidationResponse {
   /**
    * *Only returned for receipts containing auto-renewable subscriptions.*
    *
-   * For iOS 6 style transaction receipts, this is the JSON representation of the receipt for the most recent renewal.
+   * iOS 6 style transaction receipts are not longer supported.
    *
    * For iOS 7 style app receipts, the value of this key is an array containing all in-app purchase transactions. This excludes transactions for a consumable product that have been marked as finished by your app.
    */
-  latest_receipt_info?: object;
+  latest_receipt_info?: Record<string, unknown>[];
 
   /**
    * *Only returned for iOS 6 style transaction receipts, for an auto-renewable subscription.*
    *
    * The JSON representation of the receipt for the expired subscription.
    */
-  latest_expired_receipt_info?: object;
+  latest_expired_receipt_info?: Record<string, unknown>;
 
   /**
    * *Only returned for iOS 7 style app receipts containing auto-renewable subscriptions.*
    *
    * In the JSON file, the value of this key is an array where each element contains the pending renewal information for each auto-renewable subscription identified by the [Product Identifier](https://developer.apple.com/library/archive/releasenotes/General/ValidateAppStoreReceipt/Chapters/ReceiptFields.html#//apple_ref/doc/uid/TP40010573-CH106-SW11). A pending renewal may refer to a renewal that is scheduled in the future or a renewal that failed in the past for some reason.
    */
-  pending_renewal_info?: string[];
+  pending_renewal_info?: Record<string, unknown>[];
 }
 
 export interface AppReceipt {
