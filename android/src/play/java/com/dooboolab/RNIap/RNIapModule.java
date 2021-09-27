@@ -222,8 +222,9 @@ public class RNIapModule extends ReactContextBaseJavaModule implements Purchases
   @ReactMethod
   public void getItemsByType(final String type, final ReadableArray skuArr, final Promise promise) {
 
-    if (skuArr.size() <= 0) {
-      promise.reject("There was an issue obtaining products. Please try again later.");
+    if (skuArr.size() <= 0 || skuArr.isNull(0)) {
+      promise.reject("There was an error fetching products. Please try again later.");
+      return;
     }
 
     ensureConnection(
